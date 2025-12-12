@@ -32,9 +32,20 @@ export const fetchDataFromAppSheet = async () => {
     
     console.log("Raw data from AppSheet:", data);
     console.log("Total rows:", data.length);
+    
+    // Deduplicate by _RowNumber (unique row identifier)
+    const uniqueData = data.reduce((acc, row) => {
+      const rowNumber = row._RowNumber || row.id;
+      acc[rowNumber] = row;
+      return acc;
+    }, {});
+    
+    const deduplicatedData = Object.values(uniqueData);
+    console.log("After deduplication:", deduplicatedData.length, "rows");
 
-    const transformedData = data.map((row) => ({
-      id: row.id,
+    const transformedData = deduplicatedData.map((row) => ({
+      id: row._RowNumber || row.id,
+      appSheetId: row.id,
       ngay: row.ngay ? new Date(row.ngay) : new Date(),
       nguoiCapNhat: row.nguoiCapNhat || "",
       loaiThuChi: row.loaiThuChi || "",
@@ -60,7 +71,7 @@ export const updateRowInSheet = async (rowData) => {
     // Chuẩn bị data theo format AppSheet: [{id: ..., key: value, ...}]
     const editData = [
       {
-        id: rowData.id,
+        id: rowData.appSheetId || rowData.id,
         ngay:
           rowData.ngay instanceof Date
             ? rowData.ngay.toISOString().split("T")[0]
@@ -101,7 +112,7 @@ export const updateRowInSheet = async (rowData) => {
   }
 };
 
-export const deleteRowFromSheet = async (rowId) => {
+export const deleteRowFromSheet = async (rowId, appSheetId) => {
   try {
     const response = await fetch(APPSHEET_API_BASE, {
       method: "POST",
@@ -116,7 +127,7 @@ export const deleteRowFromSheet = async (rowId) => {
         },
         Rows: [
           {
-            id: rowId,
+            id: appSheetId || rowId,
           },
         ],
       }),

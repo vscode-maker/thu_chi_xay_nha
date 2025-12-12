@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import Dashboard from "./components/Dashboard";
 import FilterBar from "./components/FilterBar";
 import DataTable from "./components/DataTable";
@@ -24,6 +24,7 @@ function App() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [editingItem, setEditingItem] = useState(null);
   const [toast, setToast] = useState(null);
+  const hasFetched = useRef(false);
 
   // Filter states
   const [filters, setFilters] = useState({
@@ -43,33 +44,7 @@ function App() {
       const result = await fetchDataFromAppSheet();
 
       if (result.success && result.data) {
-        const parsedData = result.data.map((row, index) => {
-          // Create unique ID combining original ID and index
-          const uniqueId = row.id
-            ? `${row.id}_${index}`
-            : `row_${Date.now()}_${index}`;
-
-          return {
-            ...row,
-            id: uniqueId,
-            originalId: row.originalId || row.id,
-          };
-        });
-
-        // Apply local changes
-        const mergedData = parsedData
-          .filter((item) => !localChanges.deleted.includes(item.id))
-          .map((item) =>
-            localChanges.edited[item.id]
-              ? {
-                  ...item,
-                  ...localChanges.edited[item.id],
-                  ngay: new Date(localChanges.edited[item.id].ngay),
-                }
-              : item
-          );
-
-        setData(mergedData);
+        setData(result.data);
         setLoading(false);
       } else {
         throw new Error(result.message || "Không thể tải dữ liệu");
@@ -81,7 +56,10 @@ function App() {
   };
 
   useEffect(() => {
-    fetchData();
+    if (!hasFetched.current) {
+      hasFetched.current = true;
+      fetchData();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -216,7 +194,9 @@ function App() {
   const handleDelete = async (id) => {
     if (window.confirm("Bạn có chắc chắn muốn xóa giao dịch này?")) {
       try {
-        const result = await deleteRowFromSheet(id);
+        // Find the item to get appSheetId
+        const item = data.find(row => row.id === id);
+        const result = await deleteRowFromSheet(id, item?.appSheetId);
 
         if (result.success) {
           // Refresh data from AppSheet to ensure consistency
